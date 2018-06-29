@@ -36,3 +36,7 @@ class Settings(object):
         self.JWT_TOKEN_URL_NEW = 'http://_STAGING_AUTH_HOST_AND_PORT_/authServer/api/v1/token/' \
             if GlobalSetting.IS_STAGING \
             else 'http://_PROD_AUTH_HOST_AND_PORT_/authServer/api/v1/token/'
+
+        self.CREATE_CORPUS = 'http://_STAGING_AUTH_HOST_AND_PORT_/priv/training-corpus-api' \
+            if GlobalSetting.IS_STAGING \
+            else 'http://_PROD_AUTH_HOST_AND_PORT_/priv/training-corpus-api'

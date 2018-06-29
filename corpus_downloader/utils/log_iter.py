@@ -8,15 +8,15 @@ LOGGER = logging.getLogger(__name__)
 
 
 def log_iter(iterable: Iterator, total: Optional[int] = None):
-"""Create a log visiable iteration using TQDM
+    """Create a log visiable iteration using TQDM
 
-:param iterable: iterable elements
-:type iterable: Iterator
-:param total: total number of elements in the iterable, defaults to None
-:param total: Optional[int], optional
-:return: tqdm object as log compatible object
-:rtype: tqdm class
-"""
+    :param iterable: iterable elements
+    :type iterable: Iterator
+    :param total: total number of elements in the iterable, defaults to None
+    :param total: Optional[int], optional
+    :return: tqdm object as log compatible object
+    :rtype: tqdm class
+    """
     class LogFileObject(StringIO):
         def write(self, log):
             log = log.replace('\r', '').replace('\n', '')

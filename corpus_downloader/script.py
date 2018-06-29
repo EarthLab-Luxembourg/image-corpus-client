@@ -16,10 +16,15 @@ def main():
     if args.staging:
         settings.GlobalSetting.IS_STAGING = True
     auth = Auth(user=args.user, password=args.password)
-    assert args.tile_y * args.tile_x < 100, "can't handle this much tile"
-    ImageCorpus.from_id(corpus_id=args.corpus_id, auth=auth, output=args.output).download(test_size=args.test_size, width=args.width, height=args.height, drop_smaller=args.drop_smaller,
-                                                                                          tile_x=args.tile_x, tile_y=args.tile_y)
 
+    if args.command == 'download':
+        assert args.tile_y * args.tile_x < 100, "can't handle this much tile"
+        ImageCorpus.from_id(corpus_id=args.corpus_id, auth=auth, output=args.output).download(test_size=args.test_size, width=args.width,
+                                                                                            height=args.height, drop_smaller=args.drop_smaller,
+                                                                                            tile_x=args.tile_x, tile_y=args.tile_y)
+    elif args.command == 'upload':
+        ImageCorpus.from_name(corpus_name=args.corpus_name, label_type=args.label_type, auth=auth).upload(corpus_path=args.corpus_path, confidentiality=args.confidentiality, width=args.width,
+                                                                                            height=args.height, drop_smaller=args.drop_smaller)
 
 def parse_args():
     auth = argparse.ArgumentParser(add_help=False)
@@ -46,14 +51,14 @@ def parse_args():
     downloader.add_argument("--tile_y", type=int, default=1, help="Number of tile on the y axis. default to 1")
 
     uploader = subparsers.add_parser('upload', help="Upload a corpus to Max-ICS", parents=[auth, generic])
-    uploader.add_argument("corpus_id", type=str, help="the corpus id")
-    uploader.add_argument("--output", "-o", default=None, type=str, help='where to store the dataset. Default to the corpus name.')
-    uploader.add_argument("--test-size", type=float, default=0.15, help="fraction of data in the test set. Default to 0.15")
+    uploader.add_argument("corpus_name", type=str, help="set the corpus name")
+    uploader.add_argument("corpus_path", type=str, help="set the corpus absolute path. Images must be in an Images folder, labels in a Labels folder.")
+    uploader.add_argument("confidentiality", type=str, help="set the corpus confidentiality")
+    uploader.add_argument("label_type", type=str, help="set the corpus label type. Supported: SEMANTIC_SEGMENTATION")
     uploader.add_argument("--width", type=int, default=500, help="Minimum width of image. default to 500")
     uploader.add_argument("--height", type=int, default=500, help="Minimum height of image. default  to 500")
     uploader.add_argument("--drop-smaller", action='store_true', help="drop image smaller than size")
-    uploader.add_argument("--tile_x", type=int, default=1, help="Number of tile on the x axis. default to 1")
-    uploader.add_argument("--tile_y", type=int, default=1, help="Number of tile on the y axis. default to 1")
+
 
     args = parser.parse_args()
     if args.command is None:

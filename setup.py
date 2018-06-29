@@ -11,5 +11,5 @@ setup(
     description='',
     entry_points={
         'console_scripts': ['earthlab-corpus=corpus_downloader.script:main']
-    }, install_requires=['requests', 'Pillow', 'tqdm', 'h5py', 'numpy', 'scikit-image']
+    }, install_requires=['requests', 'Pillow', 'tqdm', 'h5py', 'numpy', 'scikit-image', 'scipy', 'shapely']
 )

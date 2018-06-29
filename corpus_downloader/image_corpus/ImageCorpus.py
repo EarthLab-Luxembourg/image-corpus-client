@@ -1,6 +1,8 @@
 import json
 import logging
 import os
+import datetime
+import base64
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from os import makedirs
 from random import random
@@ -9,6 +11,8 @@ from typing import List, Optional
 import h5py
 import numpy as np
 from requests.compat import quote
+
+from corpus_downloader.geo_json_extractor import GeoJsonExtractor
 
 from corpus_downloader.requests import requests
 from corpus_downloader.utils.log_iter import log_iter
@@ -20,7 +24,8 @@ LOGGER = logging.getLogger(__name__)
 
 
 class ImageCorpus(object):
-    def __init__(self, corpus_id: str, label_type: str, name: str, labels: List[str], labelled_count: int, _auth=None):
+    """corpus_id: str, label_type: str, name: str, labels: List[str], labelled_count: int, _auth=None"""
+    def __init__(self, corpus_id: None, label_type: str, name: str, labels: List[str], labelled_count: int, _auth=None):
         self.corpus_id = quote(corpus_id)
         self.label_type = label_type
         self.name = name
@@ -101,6 +106,102 @@ class ImageCorpus(object):
             train_label.resize(tr_index, axis=0)
             eval_data.resize(ev_index, axis=0)
             eval_label.resize(ev_index, axis=0)
+
+    def from_name(cls, corpus_name:str, label_type:str, auth:str):
+        return ImageCorpus(name=corpus_name, label_type=label_type, _auth=auth)
+
+    def upload(self, width: int, height: int, drop_smaller: bool):
+        LOGGER.info("Uploading {}".format(self.name))
+        if drop_smaller:
+            LOGGER.info("Ignore file lower than {}.{}".format(width, height))
+        if self.label_type == 'SEMANTIC_SEGMENTATION':
+            self._upload_semantic_segmentation(input_folder_path=input_folder_path, corpus_name=self.name, confidentiality=confidentiality,  width=width, height=height, drop_smaller=drop_smaller)
+        else:
+            raise NotImplementedError('Don\'t know how to upload {} corpus'.format(self.label_type))
+
+    def _upload_semantic_segmentation(self, input_folder_path: str, corpus_name: str, confidentiality : str,  width: int, height: int, drop_smaller: bool):
+        folders = os.listdir(input_folder_path)
+        """Check if there is an Images and Labels folder"""
+        if "Images" and "Labels" in folders:
+            images = os.listdir(input_folder_path+'/Images')
+            labels = os.listdir(input_folder_path+'/Labels')
+            corpus_id = self._create_corpus(corpus_name, confidentiality, len(images))
+            for image in images:
+                image_id = self._upload_image(corpus_id, input_folder_path+'/Images/'+image)
+                self._add_annotation(image_id, GeoJsonExtractor.getGeoJson(path=input_folder_path, image_name=image, labels=labels))
+            LOGGER.info(image+" had been processed with id "+image_id)
+        else:
+            LOGGER.error("Incorrect structure of folders in the provided folder. You must have an Images and a Labels folder.")
+
+    def _create_corpus(name :  str, confidentiality: str, corpus_size : int):
+        url = Settings().CREATE_CORPUS
+        payload = {{
+          "name": name,
+          "creation_type": "CUSTOM",
+          "labels_count": {
+          },
+          "images_labelled_count": 0,
+          "autolabel": false,
+          "description": "corpus for the training of features",
+          "images_count": "0",
+          "keywords": [
+            "none"
+          ],
+          "label_type": self.label_type,
+          "data_type": "IMAGE",
+          "images_unlabelled_count": 0,
+          "images_handled_count": corpus_size,
+          "labels": [
+          ],
+          "status": "DRAFT",
+          "labelling_type": "MANUAL",
+          "status_info": "none",
+          "confidentiality": confidentiality        }}
+        try:
+            res = requests.post(url, json=payload, auth=self._auth)
+            res.raise_for_status()
+        except HTTPError as e:
+            LOGGER.error("request returned {}".format(e.response.status_code))
+            LOGGER.error(e.response.text)
+            raise e
+        corpus_id = res.json()["corpus_id"]
+        return corpus_id
+
+    def _upload_image(corpus_id: str, image_path: str ):
+        f = open(image_path, "rb")
+        try:
+            encoded_string = base64.b64encode(f.read())
+        finally:
+            f.close()
+        url = Settings().GET_ALL_IMAGES_URL.format(corpus_id=corpus_id)
+        payload = {
+          "annotated": false,
+          "labels": "",
+          "base64": encoded_string,
+          "image_number": 0,
+          "downloaded_at": datetime.datetime.now(),
+          "url": "unknown",
+          "status": "NEW"
+        }
+        try:
+            res = requests.post(url, json=payload, auth=self._auth)
+            res.raise_for_status()
+        except HTTPError as e:
+            LOGGER.error("request returned {}".format(e.response.status_code))
+            LOGGER.error(e.response.text)
+            raise e
+        image_id = res.json()["image_id"]
+        return image_id
+
+    def _add_annotation(image_id: str, geo_json : str):
+        url = Settings().GET_IMAGE_ANNOTATION.format(image_id=image_id)
+        try:
+            res = requests.put(url, json=geo_json, auth=self._auth)
+            res.raise_for_status()
+        except HTTPError as e:
+            LOGGER.error("request returned {}".format(e.response.status_code))
+            LOGGER.error(e.response.text)
+            raise e
 
     @property
     def images(self):
