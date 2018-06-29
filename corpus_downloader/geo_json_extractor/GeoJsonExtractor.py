@@ -9,14 +9,13 @@ class GeoJsonExtractor(object):
     def __init__(self):
         self.empty_geo_json=''
 
-    @classmethod
-    def getGeoJson(path: str, image_name : str, labels : list):
+    def getGeoJson(self, path: str, image_name : str, labels : list):
         label_name = image_name.split('.')[0]
-        file_name  = find_label_file(label_name)
-        geo_json = extract_labels_and_polygons(file_name=file_name, path=path)
+        file_name  = self.find_label_file(label_name=label_name, labels=labels)
+        geo_json = self.extract_labels_and_polygons(file_name=file_name, path=path)
         return geo_json
 
-    def find_label_file(label_name : str, labels : list):
+    def find_label_file(self, label_name : str, labels : list):
         for label in labels:
             if label_name in label:
                 return label
@@ -24,7 +23,7 @@ class GeoJsonExtractor(object):
                 LOGGER.error("No label found for "+label_name+" image")
                 return 'No labels'
 
-    def extract_labels_and_polygons(file_name : str, path : str):
+    def extract_labels_and_polygons(self, file_name : str, path : str):
         """This function need to be customize accordingly to the dataset"""
 
         features = []

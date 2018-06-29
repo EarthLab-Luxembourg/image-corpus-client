@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from os import makedirs
 from random import random
 from typing import List, Optional
+from urllib.error import HTTPError
 
 import h5py
 import numpy as np
@@ -38,7 +39,10 @@ class ImageCorpus(object):
         url = Settings().GET_CORPUS_URL.format(corpus_id=corpus_id)
         body = requests.get(url, auth=auth).json()
         return cls(corpus_id=corpus_id, label_type=body['label_type'], name=output or body['name'], labels=body['labels'], labelled_count=body['images_labelled_count'], _auth=auth)
-
+    @classmethod
+    def from_name(cls, corpus_name:str, label_type:str, auth:str):
+        return cls(name=corpus_name, label_type=label_type, _auth=auth, labels = None, corpus_id=None, labelled_count=None)
+    
     def download(self, test_size: float, width: int, height: int, drop_smaller: bool, tile_x: int, tile_y: int):
         LOGGER.info("Downloading {}".format(self.name))
         if drop_smaller:
@@ -107,15 +111,12 @@ class ImageCorpus(object):
             eval_data.resize(ev_index, axis=0)
             eval_label.resize(ev_index, axis=0)
 
-    def from_name(cls, corpus_name:str, label_type:str, auth:str):
-        return ImageCorpus(name=corpus_name, label_type=label_type, _auth=auth)
-
-    def upload(self, width: int, height: int, drop_smaller: bool):
+    def upload(self, corpus_path: str, confidentiality: str, width: int, height: int, drop_smaller: bool):
         LOGGER.info("Uploading {}".format(self.name))
         if drop_smaller:
             LOGGER.info("Ignore file lower than {}.{}".format(width, height))
         if self.label_type == 'SEMANTIC_SEGMENTATION':
-            self._upload_semantic_segmentation(input_folder_path=input_folder_path, corpus_name=self.name, confidentiality=confidentiality,  width=width, height=height, drop_smaller=drop_smaller)
+            self._upload_semantic_segmentation(input_folder_path=corpus_path, corpus_name=self.name, confidentiality=confidentiality,  width=width, height=height, drop_smaller=drop_smaller)
         else:
             raise NotImplementedError('Don\'t know how to upload {} corpus'.format(self.label_type))
 
@@ -133,15 +134,15 @@ class ImageCorpus(object):
         else:
             LOGGER.error("Incorrect structure of folders in the provided folder. You must have an Images and a Labels folder.")
 
-    def _create_corpus(name :  str, confidentiality: str, corpus_size : int):
+    def _create_corpus(self, name :  str, confidentiality: str, corpus_size : int):
         url = Settings().CREATE_CORPUS
-        payload = {{
+        json = {{
           "name": name,
           "creation_type": "CUSTOM",
           "labels_count": {
           },
           "images_labelled_count": 0,
-          "autolabel": false,
+          "autolabel": False,
           "description": "corpus for the training of features",
           "images_count": "0",
           "keywords": [
@@ -158,7 +159,7 @@ class ImageCorpus(object):
           "status_info": "none",
           "confidentiality": confidentiality        }}
         try:
-            res = requests.post(url, json=payload, auth=self._auth)
+            res = requests.post(url, payload=json, auth=self._auth)
             res.raise_for_status()
         except HTTPError as e:
             LOGGER.error("request returned {}".format(e.response.status_code))
@@ -167,15 +168,15 @@ class ImageCorpus(object):
         corpus_id = res.json()["corpus_id"]
         return corpus_id
 
-    def _upload_image(corpus_id: str, image_path: str ):
+    def _upload_image(self, corpus_id: str, image_path: str ):
         f = open(image_path, "rb")
         try:
             encoded_string = base64.b64encode(f.read())
         finally:
             f.close()
         url = Settings().GET_ALL_IMAGES_URL.format(corpus_id=corpus_id)
-        payload = {
-          "annotated": false,
+        json = {
+          "annotated": False,
           "labels": "",
           "base64": encoded_string,
           "image_number": 0,
@@ -184,7 +185,7 @@ class ImageCorpus(object):
           "status": "NEW"
         }
         try:
-            res = requests.post(url, json=payload, auth=self._auth)
+            res = requests.post(url, payload=json, auth=self._auth)
             res.raise_for_status()
         except HTTPError as e:
             LOGGER.error("request returned {}".format(e.response.status_code))
@@ -193,10 +194,10 @@ class ImageCorpus(object):
         image_id = res.json()["image_id"]
         return image_id
 
-    def _add_annotation(image_id: str, geo_json : str):
+    def _add_annotation(self, image_id: str, geo_json : str):
         url = Settings().GET_IMAGE_ANNOTATION.format(image_id=image_id)
         try:
-            res = requests.put(url, json=geo_json, auth=self._auth)
+            res = requests.put(url, payload=geo_json, auth=self._auth)
             res.raise_for_status()
         except HTTPError as e:
             LOGGER.error("request returned {}".format(e.response.status_code))
